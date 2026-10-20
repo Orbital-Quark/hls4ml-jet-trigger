@@ -1,0 +1,24 @@
+name: hls4ml-tutorial
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10.16
+  - jupyterhub
+  - jupyterlab
+  - jupyter-book==2.1.5
+  - pydot==1.4.2
+  - graphviz==7.1.0
+  - onnx
+  - onnxscript
+  - onnxoptimizer
+  - pytorch
+  - tensorflow>=2.19
+  - scikit-learn
+  - pip:
+      - hls4ml[keras-v3,qkeras-v3,onnx,sr,profiling,snn] @ git+https://github.com/fastmachinelearning/hls4ml.git
+      - git+https://github.com/fastmachinelearning/qkerasV3.git
+      - brevitas
+      - qonnx
+      - conifer==1.8
+      - pysr==1.5.4
+      - xgboost==1.7.5
