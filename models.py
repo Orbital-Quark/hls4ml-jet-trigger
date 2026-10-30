@@ -11,7 +11,7 @@ def widths(scale):
 def build_model(bits, scale, n_in=16, n_out=5):
     """bits=None -> float baseline. Otherwise QKeras with `bits` for weights and activations."""
     model = keras.Sequential(name="jet_tagger")
-    model.add(keras.Input(shape=(n_in,), name="input"))
+    model.add(keras.Input(shape=(n_in,), name="jet_features"))
     for i, n in enumerate(widths(scale), start=1):
         if bits is None:
             model.add(keras.layers.Dense(n, name=f"fc{i}", kernel_initializer="lecun_uniform"))

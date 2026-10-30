@@ -16,3 +16,7 @@
 ## 2026-10-27 — A
 - Did: Wrote train.py (5.4). Quick check: trained the float baseline (16→64→32→32→5) on its own: test accuracy 76.8% (train 76.8%, val 76.9%, val_loss 0.643), matching the hls4ml paper's ~75–76%. 519 steps/epoch, ~3 s/epoch.
 - Decided / rejected: Checked training on its own before adding hls4ml (5.5), so a bug can only be in data, model or training. The baseline used all 40 epochs without early stopping firing, so raised the cap to 100 and let early stopping decide. Otherwise smaller/quantised models could be cut off early and look worse than they are.
+
+## 2026-10-28 — A
+- Did: Wrote convert.py and drift.py (5.5). Drift check on the test set: mass_scale moves the W median mass 79.5 → 81.1 / 83.4 / 87.4 GeV (+2/5/10%); pileup raises mean multiplicity 52 → 54 / 57 / 62; smear blurs the mass (W median 78.7 → 75.8) and leaves multiplicity alone. Started the Part 6 smoke test: smoke_small (16-8-8, float) reached 76.1% in Keras.
+- Decided / rejected: Renamed the model's input layer "input" → "jet_features", because hls4ml reserves the name "input" and refuses to convert. Switched the firmware softmax to hls4ml's "argmax" implementation: with the default "stable" softmax, Vitis HLS 2024.1 spent 25+ minutes stuck scheduling the exp lookup-table setup. A trigger only needs the top class, so accuracy is unchanged and the hardware is cheaper.

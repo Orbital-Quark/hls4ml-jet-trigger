@@ -10,8 +10,7 @@ def convert_and_synth(model, name, part, rf, root="hls_prjs"):
     for layer_cfg in cfg["LayerName"].values():
         layer_cfg["ReuseFactor"] = rf
     if "softmax" in cfg["LayerName"]:  # from the official tutorial
-        cfg["LayerName"]["softmax"]["exp_table_t"] = "ap_fixed<18,8>"
-        cfg["LayerName"]["softmax"]["inv_table_t"] = "ap_fixed<18,8>"
+        cfg["LayerName"]["softmax"]["Implementation"] = "argmax"
 
     hls_model = hls4ml.converters.convert_from_keras_model(
         model, hls_config=cfg, output_dir=f"{root}/{name}",
