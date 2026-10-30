@@ -12,3 +12,7 @@
 ## 2026-10-26 — A
 - Did: Wrote common.py (5.2: one shared loader for the data, feature names and scaler) and models.py (5.3: build_model(bits, scale) for float or QKeras QAT models, magnitude-pruning masks and the KeepPruned callback). Tested: the baseline 16→64→32→32→5 has 4,389 parameters (matches the hls4ml paper), the quantised layers are QDense/QActivation, and a 50% mask zeros exactly half of fc1's weights.
 - Decided / rejected: Store the scaler with pickle. It's 32 numbers and must be reused unchanged, so drifted test data gets scaled with the training statistics. joblib would add nothing at this size, and the big arrays already use np.save. QAT (train with quantisation) rather than quantising after training as the 1804 paper does. One-shot magnitude pruning at fixed sparsities rather than the paper's iterative L1 pruning, so every point in the sweep is reproducible.
+
+## 2026-10-27 — A
+- Did: Wrote train.py (5.4). Quick check: trained the float baseline (16→64→32→32→5) on its own: test accuracy 76.8% (train 76.8%, val 76.9%, val_loss 0.643), matching the hls4ml paper's ~75–76%. 519 steps/epoch, ~3 s/epoch.
+- Decided / rejected: Checked training on its own before adding hls4ml (5.5), so a bug can only be in data, model or training. The baseline used all 40 epochs without early stopping firing, so raised the cap to 100 and let early stopping decide. Otherwise smaller/quantised models could be cut off early and look worse than they are.
