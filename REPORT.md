@@ -534,3 +534,50 @@ python plots.py --open                      # interactive results page
 
 Each version's code is also tagged (`v1`, `v2`, `v3-v4`, `v5-v5.2`), so `git checkout v2` shows the code as it was
 for v2. All results are in `results/`, one file per design in `results/points/`.
+
+---
+
+## 15. References
+
+### Main papers
+1. J. Duarte et al., *Fast inference of deep neural networks in FPGAs for particle physics*, JINST 13 (2018)
+   P07027, [arXiv:1804.06913](https://arxiv.org/abs/1804.06913). **The hls4ml paper this project rebuilds:** the
+   network, the 16 inputs, and the reuse-factor and precision ideas.
+2. E. Coleman et al., *The importance of calorimetry for highly-boosted jet substructure*, JINST 13 (2018) T01003,
+   [arXiv:1709.08705](https://arxiv.org/abs/1709.08705). Where the jets and the 16 inputs come from, and how
+   detector resolution affects them.
+3. T. Aarrestad et al., *Fast convolutional neural networks on FPGAs with hls4ml*, Mach. Learn.: Sci. Technol. 2
+   (2021) 045015, [arXiv:2101.05108](https://arxiv.org/abs/2101.05108). Pruning, quantisation-aware training, and
+   why fewer bits make cheaper circuits.
+4. *Machine learning in the ATLAS Global Event Processor*,
+   [arXiv:2406.12875](https://arxiv.org/abs/2406.12875). Real trigger chips, latency budgets and resource use.
+5. CMS Collaboration, *The CMS trigger system*, JINST 12 (2017) P01020,
+   [arXiv:1609.02366](https://arxiv.org/abs/1609.02366). Trigger rates and how the first-level trigger works.
+
+### Jet physics and detector drift
+6. A. Larkoski, *Jet Physics from the Ground Up*, [arXiv:2112.15122](https://arxiv.org/abs/2112.15122).
+7. S. Marzani, G. Soyez, M. Spannowsky, *Looking inside jets*, Lecture Notes in Physics 958 (2019),
+   [arXiv:1901.10342](https://arxiv.org/abs/1901.10342).
+8. M. Dasgupta, A. Fregoso, S. Marzani, G. Salam, *Towards an understanding of jet substructure* (the groomed
+   "mMDT" jet mass), JHEP 09 (2013) 029, [arXiv:1307.0007](https://arxiv.org/abs/1307.0007).
+9. ATLAS Collaboration, *Jet energy scale measurements and their systematic uncertainties*, Phys. Rev. D 96 (2017)
+   072002, [arXiv:1703.09665](https://arxiv.org/abs/1703.09665). The basis for the mass-shift drift.
+10. G. Soyez, *Pileup mitigation at the LHC: a theorist's view*, Phys. Rep. 803 (2019) 1,
+    [arXiv:1801.09721](https://arxiv.org/abs/1801.09721). The basis for the pileup drift.
+
+### Methods used along the way
+11. G. Hinton, O. Vinyals, J. Dean, *Distilling the knowledge in a neural network*,
+    [arXiv:1503.02531](https://arxiv.org/abs/1503.02531). Distillation (v2).
+12. D. Bertolini, P. Harris, M. Low, N. Tran, *Pileup per particle identification* (PUPPI), JHEP 10 (2014) 059,
+    [arXiv:1407.6013](https://arxiv.org/abs/1407.6013). Future work.
+13. H. Qu, C. Li, S. Qian, *Particle Transformer for jet tagging* (JetClass dataset),
+    [arXiv:2202.03772](https://arxiv.org/abs/2202.03772). Future work.
+
+### Data, tools and libraries
+- **Dataset:** hls4ml LHC jet dataset (high-level features), OpenML `hls4ml_lhc_jets_hlf`.
+- **hls4ml:** network-to-circuit converter, [fastmachinelearning.org/hls4ml](https://fastmachinelearning.org/hls4ml/),
+  and its tutorial notebooks.
+- **QKeras:** low-bit training for Keras, [github.com/google/qkeras](https://github.com/google/qkeras).
+- **TensorFlow / Keras:** training. **scikit-learn:** data split, scaling, ROC and AUC. **NumPy, pandas:** data
+  and results. **Matplotlib, Plotly:** figures and the interactive results page.
+- **AMD Vitis HLS 2024.1:** synthesis. Chip limits from the AMD Zynq-7000 SoC data sheet (DS190).
