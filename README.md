@@ -13,7 +13,7 @@ that keeps its own rate on budget.
 | v5 | v4 with softer rate weights, 30% drifted training jets, and a 16th (always-zero) input so the chip takes a new jet every 20 ns |
 | v5.2 | v5's networks + physics-based input self-calibration: the stream's median jet mass and particle count undo energy-scale slips and pileup |
 
-**Setup and running:** see [SETUP.md](SETUP.md).
+**Full write-up:** [REPORT.md](REPORT.md). **Setup and running:** see [SETUP.md](SETUP.md).
 
 ```bash
 python prepare_data.py                     # download the dataset once
