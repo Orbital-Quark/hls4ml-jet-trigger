@@ -20,8 +20,9 @@ def soft_targets(y, teacher_probs, alpha=0.5, n_classes=5):
     return (alpha * np.eye(n_classes, dtype=np.float32)[y] + (1 - alpha) * teacher_probs).astype(np.float32)
 
 
-def train(cfg, X_tr, y_tr, X_val=None, y_val=None, targets=None, seed=0):
-    """targets=None -> hard labels and the built-in loss (v1). Otherwise soft targets and soft_cross_entropy."""
+def train(cfg, X_tr, y_tr, X_val=None, y_val=None, targets=None, weights=None, seed=0):
+    """targets=None -> hard labels and the built-in loss (v1). Otherwise soft targets and soft_cross_entropy.
+    weights: optional per-jet training weights (v3); validation is always judged unweighted."""
     keras.utils.set_random_seed(seed)
     model = build_model(cfg["bits"], cfg["scale"], n_in=X_tr.shape[1])
     if targets is None:
@@ -35,14 +36,15 @@ def train(cfg, X_tr, y_tr, X_val=None, y_val=None, targets=None, seed=0):
     model.compile(optimizer=keras.optimizers.Adam(1e-3), loss=loss, metrics=[metric])
     stop = keras.callbacks.EarlyStopping(monitor="val_loss", patience=5, min_delta=MIN_DELTA,
                                          restore_best_weights=True)
-    model.fit(X_tr, y_fit, batch_size=1024, epochs=100, callbacks=[stop], verbose=2, **split)
+    model.fit(X_tr, y_fit, sample_weight=weights, batch_size=1024, epochs=100, callbacks=[stop], verbose=2, **split)
 
     if cfg["sparsity"] > 0:
         masks = make_masks(model, cfg["sparsity"])
         model.compile(optimizer=keras.optimizers.Adam(1e-4), loss=loss, metrics=[metric])
         stop = keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=MIN_DELTA,
                                              restore_best_weights=True)
-        model.fit(X_tr, y_fit, batch_size=1024, epochs=15, callbacks=[KeepPruned(masks), stop], verbose=2, **split)
+        model.fit(X_tr, y_fit, sample_weight=weights, batch_size=1024, epochs=15, callbacks=[KeepPruned(masks), stop],
+                  verbose=2, **split)
         for layer, mask in masks:
             w = layer.get_weights()
             w[0] = w[0] * mask

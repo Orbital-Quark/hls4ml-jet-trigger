@@ -66,6 +66,57 @@ class StandardPrep:
         return f"StandardScaler, {len(self.names)} inputs"
 
 
+class FeatureSelector:
+    """Custom (v3): drop the inputs a trained model barely uses, measured on validation jets.
+
+    Shuffling a feature across jets breaks its link to the answer; the accuracy lost is how much the model
+    needs it. Features are dropped one at a time, each time the one whose shuffling hurts least, on top of
+    the ones already dropped (still shuffled). That matters because two overlapping features each look
+    useless while the other is present. Stops before the total loss would exceed MAX_LOSS.
+    """
+
+    MAX_LOSS = 0.003  # 0.3 accuracy points in total, a few times the run-to-run noise
+
+    def fit(self, model, X_val, y_val, names, seed=0):
+        perm = np.random.default_rng(seed).permutation(len(X_val))  # one fixed shuffle for every comparison
+
+        def acc(X):
+            return float((model.predict(X, batch_size=8192, verbose=0).argmax(1) == y_val).mean())
+
+        self.base = acc(X_val)
+        Xs, dropped, self.steps = X_val.copy(), [], []
+        while len(dropped) < X_val.shape[1] - 1:
+            trials = {}
+            for j in (j for j in range(X_val.shape[1]) if j not in dropped):
+                Xt = Xs.copy()
+                Xt[:, j] = X_val[perm, j]
+                trials[j] = acc(Xt)
+            j = max(trials, key=trials.get)
+            if self.base - trials[j] > self.MAX_LOSS:
+                break
+            dropped.append(j)
+            Xs[:, j] = X_val[perm, j]
+            self.steps.append((str(names[j]), round(self.base - trials[j], 5)))
+        self.names = [str(n) for j, n in enumerate(names) if j not in dropped]
+        self.dropped = [s[0] for s in self.steps]
+        return self
+
+
+class SelectedPrep:
+    """Any preprocessing, followed by keeping only the selected inputs (v3)."""
+
+    def __init__(self, prep, keep):
+        self.prep, self.names = prep, list(keep)
+        self.cols = [prep.names.index(n) for n in keep]
+        self.dropped = prep.dropped + [n for n in prep.names if n not in keep]
+
+    def transform(self, X):
+        return np.ascontiguousarray(self.prep.transform(X)[:, self.cols])
+
+    def describe(self):
+        return f"{self.prep.describe()}; feature selection keeps {len(self.names)}: {self.names}"
+
+
 def make_prep(flags, X_tr_raw, scaler, names):
     if flags.get("dedup") or flags.get("log"):
         return PhysicsScaler(dedup=flags.get("dedup", False), log=flags.get("log", False)).fit(X_tr_raw, names)

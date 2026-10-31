@@ -1,5 +1,6 @@
-"""Which v2 change helps? Train one model (6-bit, full size, unpruned) with v1, each change on its own,
-and all of v2. Keras-only (no synthesis), so the whole table takes minutes, not hours."""
+"""Which change helps? Train one model (6-bit, full size, unpruned) with each change on its own and all together.
+ABLATE=v2 (default): v1, each v2 change, all of v2. ABLATE=v3: v2, each v3 change on top of v2, all of v3.
+Keras-only (no synthesis), so the whole table takes minutes, not hours."""
 import os
 
 os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
@@ -9,13 +10,18 @@ import pandas as pd
 
 from common import classes
 from drift import apply_drift
-from pipeline import V2, build_data, ensure_teacher
+from pipeline import V2, V3, build_data, ensure_selection, ensure_teacher
 from train import train
-from trigger import TriggerMenu
+from trigger import TriggerMenu, roc
 
 CFG = dict(bits=6, scale=1.0, sparsity=0.0)
-VARIANTS = {"v1": {}, "+dedup": dict(dedup=True), "+log scaler": dict(log=True), "+augment": dict(augment=True),
-            "+distill": dict(distill=True), "v2 (all)": V2}
+ABLATE = os.environ.get("ABLATE", "v2")
+VARIANTS = {
+    "v2": {"v1": {}, "+dedup": dict(dedup=True), "+log scaler": dict(log=True), "+augment": dict(augment=True),
+           "+distill": dict(distill=True), "v2 (all)": V2},
+    "v3": {"v2": V2, "+rate weights": dict(V2, rate=True), "+flat mass": dict(V2, flat_mass=True),
+           "+feature select": dict(V2, select=True), "v3 (all)": V3},
+}[ABLATE]
 TESTS = [("mass_scale", 0.05), ("smear", 0.1), ("pileup", 5)]
 
 
@@ -27,13 +33,16 @@ rows = []
 for label, flags in VARIANTS.items():
     if flags.get("distill"):
         print(ensure_teacher(flags), flush=True)
+    if flags.get("select"):
+        print(ensure_selection(flags), flush=True)
     d = build_data(flags)
-    model = train(CFG, d.X_fit, d.y_fit, d.X_val, d.y_val, targets=d.targets)
+    model = train(CFG, d.X_fit, d.y_fit, d.X_val, d.y_val, targets=d.targets, weights=d.weights)
     cl = classes()
     Xe = d.prep.transform(d.X_te_raw)
     le = logits(model, Xe)
     menu = TriggerMenu(cl).calibrate(logits(model, d.X_val), d.y_val)
     row = dict(variant=label, inputs=len(d.prep.names), acc=(le.argmax(1) == d.y_te).mean(), **menu.evaluate(le, d.y_te))
+    row.update({k: v for k, v in roc(le, d.y_te, cl).items() if k.startswith("eff1")})
     for kind, level in TESTS:
         Xd = d.prep.transform(apply_drift(d.X_te_raw, kind, level, d.std, np.random.default_rng(1234), d.names))
         ld = logits(model, Xd)
@@ -45,6 +54,6 @@ for label, flags in VARIANTS.items():
 
 df = pd.DataFrame(rows)
 os.makedirs("results", exist_ok=True)
-df.to_csv("results/ablation.csv", index=False)
+df.to_csv("results/ablation.csv" if ABLATE == "v2" else f"results/ablation_{ABLATE}.csv", index=False)
 pd.set_option("display.width", 200, "display.float_format", "{:.4f}".format)
 print(df.to_string(index=False))
