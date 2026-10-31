@@ -10,13 +10,13 @@ FLATTEN = 0.5      # 1 = every class fully flat in mass; 0.5 = halfway, so mass 
 MAX_WEIGHT = 10.0  # cap (before renormalising) for jets in mass bins where their class is very rare
 
 
-def rate_weights(y, classes):
+def rate_weights(y, classes, soften=SOFTEN):
     """Custom (v3): per-jet weights that move the balanced dataset towards the real-world mix of jet types.
     The dataset's own class shares are read from the labels, so the weights undo whatever mix the data has.
-    Mistakes on the common q/g jets then cost more, as they do in a trigger."""
+    Mistakes on the common q/g jets then cost more, as they do in a trigger. v5 uses a softer 0.1."""
     share = np.bincount(y, minlength=len(classes)) / len(y)
     real = np.array([PRODUCTION_RATE[c] for c in classes])
-    w = ((real / real.sum()) / share) ** SOFTEN
+    w = ((real / real.sum()) / share) ** soften
     w = w[y]
     return (w / w.mean()).astype(np.float32)
 

@@ -6,12 +6,18 @@ DRIFTS = (
     + [("smear", k) for k in (0.05, 0.10, 0.20)]        # resolution loss (ageing)
     + [("pileup", lam) for lam in (2, 5, 10)]            # extra soft particles (pileup proxy)
 )
+# Drifts the training never shows (v2+ train on one drift per jet, up to mass +-10%, smear 20%, pileup 10):
+# all three at once, and each one beyond the training range. A fairer test of robustness than DRIFTS.
+UNSEEN = [("combined", 1.0), ("mass_scale", 0.15), ("smear", 0.30), ("pileup", 15)]
 
 
 def apply_drift(X_raw, kind, level, train_std, rng, names):
     X = X_raw.astype(np.float32).copy()
     mass, mult = names.index("mass_mmdt"), names.index("multiplicity")
-    if kind == "mass_scale":
+    if kind == "combined":  # mass +5%, smear 10% and pileup +5 on the same jets (times `level`)
+        for k, l in (("mass_scale", 0.05), ("smear", 0.10), ("pileup", 5)):
+            X = apply_drift(X, k, l * level, train_std, rng, names)
+    elif kind == "mass_scale":
         X[:, mass] *= 1.0 + level
     elif kind == "smear":
         noise = rng.normal(0.0, 1.0, X.shape).astype(np.float32) * (level * train_std)

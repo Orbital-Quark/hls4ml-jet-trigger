@@ -5,8 +5,8 @@ import numpy as np
 
 from common import DATA, classes, load, split_val
 from drift import augment
-from features import FeatureSelector, SelectedPrep, make_prep
-from weights import flat_mass_weights, rate_weights
+from features import FeatureSelector, PaddedPrep, SelectedPrep, make_prep
+from weights import SOFTEN, flat_mass_weights, rate_weights
 
 TEACHERS = DATA / "teachers"
 SELECTIONS = DATA / "selections"
@@ -15,14 +15,26 @@ V2 = dict(dedup=True, log=True, augment=True, distill=True)
 V3 = dict(V2, rate=True, flat_mass=True, select=True)
 # v4: v2, plus the one v3 change that helped (rate weights: W/Z trigger efficiency), plus the self-correcting trigger
 V4 = dict(V2, rate=True, adaptive=True)
+# v5: v4 with the fixes found by comparing v1, v2 and v4: softer rate weights (0.1 instead of 0.25, to keep the AUC
+# gain but lose less accuracy and pileup robustness), 30% instead of 50% drifted training jets (healthy accuracy),
+# and a 16th, always-zero input so reuse 4 divides the first layer evenly (a new jet every 20 ns instead of 25)
+V5 = dict(V4, rate=0.1, augment=0.3, pad=16)
+# v5.2: v5's networks, plus a physics-based self-calibration of the inputs (features.InputCalibrator; selfcal.py)
+V52 = dict(V5, selfcal=True)
+AUGMENT_FRAC = 0.5  # augment=True
+
+
+def flag_name(flags, f):
+    """A flag set to a value instead of True keeps the value in file names, e.g. augment0.3."""
+    return f if flags[f] is True else f"{f}{flags[f]}"
 
 
 def teacher_key(flags):
-    return "-".join(f for f in ("dedup", "log", "augment") if flags.get(f)) or "plain"
+    return "-".join(flag_name(flags, f) for f in ("dedup", "log", "augment") if flags.get(f)) or "plain"
 
 
 def selection_key(flags):
-    return "-".join(f for f in ("dedup", "log", "augment", "rate", "flat_mass") if flags.get(f)) or "plain"
+    return "-".join(flag_name(flags, f) for f in ("dedup", "log", "augment", "rate", "flat_mass") if flags.get(f)) or "plain"
 
 
 def build_data(flags, with_targets=True):
@@ -36,8 +48,11 @@ def build_data(flags, with_targets=True):
     prep = make_prep(flags, Xa_raw, scaler, names)
     if flags.get("select"):
         prep = SelectedPrep(prep, json.loads((SELECTIONS / f"{selection_key(flags)}.json").read_text())["keep"])
+    if flags.get("pad"):
+        prep = PaddedPrep(prep, flags["pad"])
     std = X_tr_raw.std(axis=0)  # same drift size for every version
-    X_fit_raw = augment(Xa_raw, std, np.random.default_rng(7), names) if flags.get("augment") else Xa_raw
+    frac = AUGMENT_FRAC if flags.get("augment") is True else flags.get("augment")
+    X_fit_raw = augment(Xa_raw, std, np.random.default_rng(7), names, frac) if frac else Xa_raw
 
     d = SimpleNamespace(names=names, prep=prep, std=std, X_fit=prep.transform(X_fit_raw), y_fit=ya,
                         X_val=prep.transform(Xv_raw), y_val=yv, X_val_raw=Xv_raw,
@@ -48,7 +63,7 @@ def build_data(flags, with_targets=True):
         cl = classes()
         d.weights = np.ones(len(ya), dtype=np.float32)
         if flags.get("rate"):
-            d.weights *= rate_weights(ya, cl)
+            d.weights *= rate_weights(ya, cl, SOFTEN if flags["rate"] is True else flags["rate"])
         if flags.get("flat_mass"):
             d.weights *= flat_mass_weights(X_fit_raw[:, names.index("mass_mmdt")], ya, len(cl))
     return d

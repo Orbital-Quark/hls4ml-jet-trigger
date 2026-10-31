@@ -1,6 +1,6 @@
 import hls4ml
 
-CLOCK_NS = 5.0
+from common import CLOCK_NS
 
 
 def convert_and_synth(model, name, part, rf, root="hls_prjs", synth=True):

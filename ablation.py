@@ -1,5 +1,6 @@
 """Which change helps? Train one model (6-bit, full size, unpruned) with each change on its own and all together.
 ABLATE=v2 (default): v1, each v2 change, all of v2. ABLATE=v3: v2, each v3 change on top of v2, all of v3.
+ABLATE=v5: v1, v2, v4, each v5 change on top of v4, all of v5 (the 16th input only matters on the chip).
 Keras-only (no synthesis), so the whole table takes minutes, not hours."""
 import os
 
@@ -9,8 +10,8 @@ import numpy as np
 import pandas as pd
 
 from common import classes
-from drift import apply_drift
-from pipeline import V2, V3, build_data, ensure_selection, ensure_teacher
+from drift import UNSEEN, apply_drift
+from pipeline import V2, V3, V4, V5, build_data, ensure_selection, ensure_teacher
 from train import train
 from trigger import TriggerMenu, roc
 
@@ -21,6 +22,8 @@ VARIANTS = {
            "+distill": dict(distill=True), "v2 (all)": V2},
     "v3": {"v2": V2, "+rate weights": dict(V2, rate=True), "+flat mass": dict(V2, flat_mass=True),
            "+feature select": dict(V2, select=True), "v3 (all)": V3},
+    "v5": {"v1": {}, "v2": V2, "v4": V4, "+softer rate weights": dict(V4, rate=V5["rate"]),
+           "+fewer drifted jets": dict(V4, augment=V5["augment"]), "v5 (all)": V5},
 }[ABLATE]
 TESTS = [("mass_scale", 0.05), ("smear", 0.1), ("pileup", 5)]
 
@@ -49,6 +52,9 @@ for label, flags in VARIANTS.items():
         row[f"acc_{kind}"] = (ld.argmax(1) == d.y_te).mean()
         if kind == "mass_scale":
             row.update({f"{k}_mass5": v for k, v in menu.evaluate(ld, d.y_te).items() if k.startswith("bkg")})
+    for kind, level in UNSEEN:
+        Xd = d.prep.transform(apply_drift(d.X_te_raw, kind, level, d.std, np.random.default_rng(1234), d.names))
+        row[f"unseen_{kind}_{level}"] = (logits(model, Xd).argmax(1) == d.y_te).mean()
     rows.append(row)
     print(row, flush=True)
 

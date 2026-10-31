@@ -7,26 +7,19 @@ import textwrap
 import numpy as np
 import pandas as pd
 
+from common import CLOCK_NS  # noqa: F401  (re-exported for plots.py)
 from drift import DRIFTS
 from trigger import SIGNALS
 
 Z7020 = dict(lut=53_200, ff=106_400, dsp=220, bram18=280)  # xc7z020: the chip the designs are synthesised for
-VU9P = dict(lut=1_182_240, dsp=6_840)                        # XCVU9P: L1-trigger-class FPGA, shown for context
 MIN_ACC = 0.70  # designs below this have collapsed (over-pruned); left out of the summary plots, listed in the printout
 DRIFT_COLS = [f"drift_{k}_{l}" for k, l in DRIFTS[1:]]
-CLOCK_NS = 5.0
 
 
 def load_results():
     df = pd.DataFrame([json.load(open(f)) for f in sorted(glob.glob("results/points/*.json"))])
-    for k, n in Z7020.items():
-        df[f"{k}_pct_z7020"] = 100 * df[k] / n
     df["fits_z7020"] = np.all([df[k] <= n for k, n in Z7020.items()], axis=0)
-    for k, n in VU9P.items():
-        df[f"{k}_pct_vu9p"] = 100 * df[k] / n
     df["mean_drift_drop"] = 100 * (df["acc_hls"].to_numpy()[:, None] - df[DRIFT_COLS].to_numpy()).mean(axis=1)
-    for s in SIGNALS:  # background passing at the clean threshold under a 5% mass drift, relative to the clean rate
-        df[f"rate_x_{s}_mass5"] = df[f"bkg_{s}_mass_scale_0.05"] / df[f"bkg_{s}"].where(df[f"bkg_{s}"] > 0)
     return df
 
 
@@ -62,8 +55,7 @@ if __name__ == "__main__":
 
     # Each version against the one before, for the same design (bits, size, pruning, reuse factor)
     key = ["bits_label", "scale", "sparsity", "rf"]
-    cols = ["acc_hls", "mean_drift_drop", "eff1_t", "eff1_w", "eff1_z", "rate_x_t_mass5", "rate_x_w_mass5", "n_inputs",
-            "dsp", "lut", "ii"]
+    cols = ["acc_hls", "mean_drift_drop", "eff1_t", "eff1_w", "eff1_z", "n_inputs", "dsp", "lut", "ii"]
     labels = {"acc_hls": ("Accuracy", 100, "pts"), "mean_drift_drop": ("Accuracy lost under drift", 1, "pts"),
               "eff1_t": ("Top efficiency @1% bkg", 100, "pts"), "eff1_w": ("W efficiency @1% bkg", 100, "pts"),
               "eff1_z": ("Z efficiency @1% bkg", 100, "pts"), "n_inputs": ("Inputs", 1, ""),
@@ -113,4 +105,4 @@ if __name__ == "__main__":
     section(f"Collapsed designs (accuracy < {MIN_ACC:.0%}, left out of the plots)")
     names = df.loc[df["acc_hls"] < MIN_ACC, "name"].tolist()
     print(textwrap.fill(", ".join(names), 110) if names else "none")
-    print("\nEvery design: results/results.csv    Graphs: python plots.py --open")
+    print("\nEvery design: results/results.csv    Results page: python plots.py --open")

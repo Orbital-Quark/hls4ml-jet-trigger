@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jet Trigger Results</title>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+:root{--bg:#fcfcfb;--panel:#fff;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e4e3df;--soft:#f3f2ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--panel:#1c1c1a;--ink:#f2f1ee;--ink2:#b9b8b3;--muted:#7d7c77;--line:#34342f;--soft:#24241f}}
+:root[data-theme="dark"]{--bg:#141413;--panel:#1c1c1a;--ink:#f2f1ee;--ink2:#b9b8b3;--muted:#7d7c77;--line:#34342f;--soft:#24241f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1080px;margin:0 auto;padding:28px 16px 64px}
+h1{font-size:23px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--ink2);margin:0;font-size:14px}
+.live{display:inline-block;margin-top:8px;font-size:13px;color:var(--ink2);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#1baf7a;margin-right:6px;vertical-align:1px}
+nav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:22px 0 12px;overflow-x:auto}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:9px 16px;font:inherit;color:var(--ink2);cursor:pointer;white-space:nowrap}
+nav button:hover{color:var(--ink)}
+nav button.on{color:var(--ink);border-color:var(--ink);font-weight:600}
+nav i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+.about{color:var(--ink2);margin:0 0 18px;font-size:14px}
+.bestname{font-size:13.5px;color:var(--ink2);margin:0 0 8px}
+code{font:12.5px ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:4px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+.tile .k{color:var(--ink2);font-size:12.5px}
+.tile .v{font-size:25px;font-weight:600;font-variant-numeric:tabular-nums;margin:2px 0}
+.tile .c{color:var(--ink2);font-size:12px;line-height:1.4}
+.up{color:#1a8a5c}.down{color:#c4452b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .up{color:#4fd09a}:root:not([data-theme="light"]) .down{color:#f08a70}}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--ink2);font-weight:500}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:0;color:var(--ink2)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px 10px;margin:18px 0}
+.card h2{font-size:17px;margin:0 0 6px}
+.answer{margin:0 0 10px;font-size:14.5px}
+.read{margin:4px 0 6px;color:var(--ink2);font-size:13px;border-top:1px solid var(--line);padding-top:8px}
+.read b{color:var(--ink);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:0 6px 4px 0}
+.seg button{background:none;border:0;padding:4px 12px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--soft);color:var(--ink);font-weight:600}
+.plot{height:370px}
+.hidden{display:none}
+footer{color:var(--muted);font-size:12.5px;margin-top:28px}
+@media (max-width:600px){.plot{height:300px}.card{padding:14px 12px 8px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>FPGA jet trigger: sweep results</h1>
+  <p class="sub" id="sub">Loading…</p>
+  <span class="live hidden" id="live"></span>
+</header>
+<nav id="tabs"></nav>
+<p class="about" id="about"></p>
+<div id="score"></div>
+
+<section class="card" id="c-res">
+  <h2>What accuracy fits on the chip?</h2>
+  <p class="answer"></p>
+  <div class="seg" data-mode="res"><button data-val="dsp">DSPs</button><button data-val="lut">LUTs</button></div>
+  <div class="plot"></div>
+  <p class="read"></p>
+</section>
+
+<section class="card" id="c-bits">
+  <h2>How few bits can the network use?</h2>
+  <p class="answer"></p>
+  <div class="seg" data-mode="bits"><button data-val="acc">Accuracy</button><button data-val="auc">AUC ÷ full precision (paper's measure)</button></div>
+  <div class="plot"></div>
+  <p class="read"></p>
+</section>
+
+<section class="card" id="c-drift">
+  <h2>Which version stays accurate when the detector drifts?</h2>
+  <p class="answer"></p>
+  <div class="plot"></div>
+  <p class="read"></p>
+</section>
+
+<section class="card" id="c-trig">
+  <h2>How much real signal does the trigger keep?</h2>
+  <p class="answer"></p>
+  <div class="seg" data-mode="trig"><button data-val="eff">Signal kept at 1% background</button><button data-val="auc">AUC vs paper</button></div>
+  <div class="plot"></div>
+  <p class="read"></p>
+</section>
+
+<section class="card" id="c-self">
+  <h2>Does the self-correcting trigger stay on budget?</h2>
+  <p class="answer"></p>
+  <div class="seg" data-mode="sig"><button data-val="t">Top trigger</button><button data-val="w">W trigger</button><button data-val="z">Z trigger</button></div>
+  <div class="plot"></div>
+  <p class="read"></p>
+</section>
+
+<footer id="foot"></footer>
+</main>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const S = () => window.SWEEP;
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const bad = x => x == null || isNaN(x);
+  const pct = (x, d = 1) => bad(x) ? '–' : (100 * x).toFixed(d) + '%';
+  const pts = (x, d = 1) => bad(x) ? '–' : x.toFixed(d) + ' pts';
+  const num = x => bad(x) ? '–' : Math.round(x).toLocaleString('en-US');
+  const mean = a => { const b = a.filter(x => !bad(x)); return b.length ? b.reduce((s, x) => s + x, 0) / b.length : NaN; };
+  const BITS = ['4', '6', '8', '16', 'float'];
+  const BITS_LABEL = ['4-bit', '6-bit', '8-bit', '16-bit', 'full ⟨16,6⟩'];
+  const SIG = ['t', 'w', 'z'], SIG_NAME = {t: 'top', w: 'W', z: 'Z'};
+  const ABOUT = {
+    v1: "The hls4ml paper's setup, reproduced: 16 inputs, a 64-32-32 network, standard training. The baseline every other version is measured against.",
+    v2: 'v1 plus: duplicate input removed, wide-range inputs log-scaled, training on drifted jets, knowledge distillation from a float teacher, and mixed per-layer precision.',
+    v3: 'v2 plus three data-driven changes: production-rate weights, flat-mass weights and permutation-based feature selection.',
+    v4: 'v2 plus production-rate weights and a self-correcting trigger that re-tunes its own thresholds as the detector drifts.',
+    v5: 'v4 with three fixes from comparing v1, v2 and v4: softer rate weights (less accuracy and pileup robustness lost), 30% instead of 50% drifted training jets (more healthy accuracy), and a 16th, always-zero input so the chip takes a new jet every 20 ns instead of 25.',
+    'v5.2': "v5's networks plus a physics-based self-calibration of the inputs. The healthy detector's median jet mass and particle count act as a standard candle: if the stream's medians move, the detector moved, so each jet's mass is rescaled and extra pileup particles are subtracted before the network sees it. No retraining.",
+    compare: 'Every version on the same axes. Click a legend entry to hide or show it; drag to zoom, double-click to reset.'
+  };
+  let tab = null;
+  const mode = {res: 'dsp', bits: 'acc', trig: 'eff', sig: 't'};
+
+  // ---- data helpers ----
+  const designs = v => S().designs.filter(d => d.version === v && d.acc_hls >= S().min_acc);
+  const best = v => designs(v).filter(d => d.fits_z7020).sort((a, b) => b.acc_hls - a.acc_hls)[0];
+  const drawn = () => tab === 'compare' ? S().versions.map(v => ({v, ref: false}))
+    : (tab !== 'v1' && S().versions.includes('v1') ? [{v: 'v1', ref: true}] : []).concat([{v: tab, ref: false}]);
+  const refV = () => (drawn().find(x => x.ref) || {}).v;
+  const mainV = () => drawn().filter(x => !x.ref).map(x => x.v);
+  const name = (v, ref) => ref ? `${v} (reference)` : v;
+  const color = v => S().colors[v] || css('--ink2');
+  const driftLabel = key => (S().drifts.find(d => d.key === key) || {}).label || key;
+  const kindOf = key => key.replace(/_[\d.]+$/, '');
+  const drifted = (d, key) => 100 * d.acc_hls - (key ? d['loss_' + key] : d.mean_drift_drop);  // accuracy left, in %; no key = average of all drifts
+  const designKey = d => [d.bits_label, d.scale, d.sparsity, d.rf].join('|');
+  function matched(vs) {  // per version, the designs that work in every version in vs, so averages compare like with like
+    const sets = vs.map(v => new Set(designs(v).map(designKey)));
+    return Object.fromEntries(vs.map(v => [v, designs(v).filter(d => sets.every(s => s.has(designKey(d))))]));
+  }
+  const delta = (a, b, unit, d = 1, higherBetter = true) => {
+    if (bad(a) || bad(b)) return '';
+    const x = a - b, good = higherBetter ? x > 0 : x < 0, zero = Math.abs(x) < 0.5 * 10 ** -d;
+    return ` <span class="${zero ? '' : good ? 'up' : 'down'}">(${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(d)}${unit})</span>`;
+  };
+
+  function hover(d) {
+    return `<b>${d.name}</b><br>accuracy ${pct(d.acc_hls, 2)} · top kept ${pct(d.eff1_t)} at 1% background<br>` +
+      `accuracy under drift ${pct(drifted(d) / 100, 2)} on average (${pts(d.mean_drift_drop)} lost)<br>` +
+      `${num(d.dsp)} DSPs · ${num(d.lut)} LUTs · ${num(d.latency_ns)} ns latency · new jet every ${num(d.ii * S().clock_ns)} ns<br>` +
+      (d.fits_z7020 ? 'fits the xc7z020' : 'too big for the xc7z020');
+  }
+
+  // ---- plotting helpers ----
+  const axis = o => Object.assign({gridcolor: css('--line'), linecolor: css('--line'), zerolinecolor: css('--line'),
+    tickcolor: css('--line'), automargin: true}, o);
+  const layout = (key, o) => Object.assign({
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: {family: 'system-ui,-apple-system,"Segoe UI",sans-serif', size: 12, color: css('--ink2')},
+    margin: {l: 58, r: 14, t: 8, b: 46}, legend: {orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom'},
+    hoverlabel: {bgcolor: css('--panel'), bordercolor: css('--line'), font: {color: css('--ink'), size: 12}},
+    uirevision: tab + key  // keeps zoom across live refreshes; resets when the tab or view changes
+  }, o);
+  const CONFIG = {displaylogo: false, responsive: true, modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']};
+  const plot = (id, traces, lay) => Plotly.react($(`#${id} .plot`), traces, lay, CONFIG);
+  const say = (id, answer, read) => { $(`#${id} .answer`).innerHTML = answer; $(`#${id} .read`).innerHTML = read; };
+  const hline = (y, text) => ({
+    shape: {type: 'line', xref: 'paper', x0: 0, x1: 1, y0: y, y1: y, line: {color: css('--ink2'), width: 1, dash: 'dot'}},
+    note: {xref: 'paper', x: 1, y, xanchor: 'right', yanchor: 'bottom', text, showarrow: false, font: {size: 11, color: css('--ink2')}}
+  });
+
+  // ---- scorecard ----
+  function tile(k, v, c) { return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="c">${c}</div></div>`; }
+
+  function scorecard() {
+    const P = S().paper, el = $('#score');
+    if (tab === 'compare') {
+      const rows = S().versions.map(v => {
+        const b = best(v);
+        return b ? `<tr><td><b>${v}</b> <code>${b.name}</code></td><td>${pct(b.acc_hls, 2)}</td><td>${pct(drifted(b) / 100, 2)}</td>
+          <td>${pct(b.auc_t)}</td><td>${pct(b.eff1_t)}</td><td>${num(b.dsp)}</td><td>${num(b.lut)}</td>
+          <td>${num(b.latency_ns)} ns</td><td>${num(b.ii * S().clock_ns)} ns</td></tr>`
+          : `<tr><td><b>${v}</b></td><td colspan="8">no design fits the chip yet</td></tr>`;
+      }).join('');
+      el.innerHTML = `<p class="bestname">Best design that fits the xc7z020, per version. "Drifted" is the average over the nine drift cases below.</p><div class="scroll"><table>
+        <tr><th>Version · design</th><th>Accuracy, healthy</th><th>Accuracy, drifted</th><th>Top AUC</th><th>Top kept @1%</th>
+        <th>DSPs</th><th>LUTs</th><th>Latency</th><th>New jet every</th></tr>${rows}
+        <tr><td>hls4ml paper (bigger xcku115 chip)</td><td>–</td><td>–</td><td>${pct(P.auc.t)}</td><td>–</td>
+        <td>${num(P.dsp)}</td><td>${num(P.logic)} LUT+FF</td><td>${P.latency_ns} ns</td><td>${S().clock_ns} ns</td></tr></table></div>`;
+      return;
+    }
+    const b = best(tab), r = refV() && best(refV());
+    if (!b) { el.innerHTML = `<p class="bestname">No ${tab} design fits the xc7z020 yet.</p>`; return; }
+    const vs = (x, f, scale, unit, d, hb) => r ? `v1: ${f(r[x])}${delta(scale * b[x], scale * r[x], unit, d, hb)}` : '';
+    const worst = S().drifts.reduce((a, d) => b['loss_' + d.key] > b['loss_' + a.key] ? d : a);
+    el.innerHTML = `<p class="bestname">Best ${tab} design that fits the xc7z020: <code>${b.name}</code>${r ? `, against v1's best <code>${r.name}</code>` : ''}</p>
+      <div class="tiles">
+      ${tile('Accuracy, healthy detector', pct(b.acc_hls, 2), r ? vs('acc_hls', x => pct(x, 2), 100, ' pts', 2, true) : 'the paper reports AUC, not accuracy')}
+      ${tile('Accuracy, drifted detector', pct(drifted(b) / 100, 2), `average of 9 drift cases; worst ${worst.label}: ${pct(drifted(b, worst.key) / 100)}` +
+        (r ? `<br>v1: ${pct(drifted(r) / 100, 2)}${delta(drifted(b), drifted(r), ' pts', 2, true)}` : ''))}
+      ${tile('Top-tagger AUC', pct(b.auc_t), `paper (float): ${pct(P.auc.t)}${r ? '<br>' + vs('auc_t', pct, 100, ' pts', 1, true) : ''}`)}
+      ${tile('DSPs used', `${num(b.dsp)}<span style="font-size:14px;color:var(--ink2)"> / ${S().chip.dsp}</span>`, `paper: ${num(P.dsp)} of ${num(P.chip_dsp)} on its chip${r ? '<br>' + vs('dsp', num, 1, '', 0, false) : ''}`)}
+      ${tile('Latency', `${num(b.latency_ns)} ns`, `paper: ${P.latency_ns} ns (HLS estimate)${r ? '<br>' + vs('latency_ns', x => num(x) + ' ns', 1, ' ns', 0, false) : ''}`)}
+      ${tile('New jet every', `${num(b.ii * S().clock_ns)} ns`, 'LHC: one bunch crossing every 25 ns')}
+      </div>`;
+  }
+
+  // ---- 1. accuracy vs resources ----
+  function pareto(ds, r) {
+    let top = -1;
+    return [...ds].sort((a, b) => a[r] - b[r] || b.acc_hls - a.acc_hls).filter(d => d.acc_hls > top && (top = d.acc_hls, true));
+  }
+
+  function chartResources() {
+    const r = mode.res, chip = S().chip[r], x = d => Math.max(d[r], 1), traces = [];
+    for (const {v, ref} of drawn()) {
+      const ds = designs(v), front = pareto(ds, r);
+      traces.push({type: 'scatter', mode: 'markers', x: ds.map(x), y: ds.map(d => 100 * d.acc_hls), text: ds.map(hover),
+        hovertemplate: '%{text}<extra></extra>', marker: {color: color(v), size: 8, opacity: ref ? 0.18 : 0.45},
+        name: name(v, ref), legendgroup: v, showlegend: false});
+      traces.push({type: 'scatter', mode: 'lines+markers', x: front.map(x), y: front.map(d => 100 * d.acc_hls),
+        text: front.map(hover), hovertemplate: '%{text}<extra></extra>', opacity: ref ? 0.5 : 1,
+        line: {shape: 'hv', width: 2, color: color(v)}, marker: {size: 9, color: color(v), line: {width: 2, color: css('--panel')}},
+        name: name(v, ref), legendgroup: v});
+    }
+    plot('c-res', traces, layout('res' + r, {
+      xaxis: axis({type: 'log', title: {text: r === 'dsp' ? 'DSPs used (hardware multipliers)' : 'LUTs used (general logic)'}}),
+      yaxis: axis({title: {text: 'Accuracy (%)'}}),
+      shapes: [{type: 'line', xref: 'x', yref: 'paper', x0: chip, x1: chip, y0: 0, y1: 1, line: {color: css('--ink2'), width: 1, dash: 'dot'}}],
+      annotations: [{xref: 'x', yref: 'paper', x: Math.log10(chip), y: 0.02, xanchor: 'right', yanchor: 'bottom', showarrow: false,
+        text: `xc7z020 limit (${num(chip)}) `, font: {size: 11, color: css('--ink2')}}]
+    }));
+    const parts = drawn().map(({v}) => {
+      const b = best(v);
+      return b ? `<b>${v}</b> ${pct(b.acc_hls, 2)} using ${num(b.dsp)} DSPs and ${num(b.lut)} LUTs` : `<b>${v}</b> none yet`;
+    });
+    let gap = '';
+    const m = mainV(), rv = refV();
+    if (rv && best(rv) && best(m[0])) {
+      const b = best(m[0]), o = best(rv), cheaper = o[r] > 0 ? 1 - b[r] / o[r] : 0;
+      gap = ` ${m[0]} gets within ${pts(100 * (o.acc_hls - b.acc_hls), 2)} of v1 with ${Math.abs(Math.round(100 * cheaper))}% ${cheaper >= 0 ? 'fewer' : 'more'} ${r === 'dsp' ? 'DSPs' : 'LUTs'}.`;
+      if (b.acc_hls >= o.acc_hls) gap = ` ${m[0]} beats v1 by ${pts(100 * (b.acc_hls - o.acc_hls), 2)}.`;
+    }
+    say('c-res', `Most accurate design that still fits the xc7z020: ${parts.join('; ')}.${gap}`,
+      `<b>How to read:</b> each dot is one synthesised design (hover for its numbers). The line is the Pareto front, the best accuracy reachable at each resource budget. Up and left is better; right of the dotted line the design no longer fits the chip.` +
+      (r === 'dsp' ? ' Designs that use no DSPs (all multiplies done in LUTs) sit at 1.' : ''));
+  }
+
+  // ---- 2. precision scan ----
+  function scan(v) {
+    const ds = S().designs.filter(d => d.version === v && d.scale === 1 && d.sparsity === 0);
+    const rf = Math.min(...ds.map(d => d.rf));
+    return BITS.map(b => ds.find(d => d.bits_label === b && d.rf === rf));
+  }
+
+  function chartBits() {
+    const auc = mode.bits === 'auc', traces = [];
+    for (const {v, ref} of drawn()) {
+      const s = scan(v), f = s[4];
+      const y = s.map(d => !d ? null : auc ? (f ? d.auc_t / f.auc_t : null) : 100 * d.acc_hls);
+      traces.push({type: 'scatter', mode: 'lines+markers', x: BITS_LABEL, y, name: name(v, ref), opacity: ref ? 0.5 : 1,
+        line: {width: 2, color: color(v)}, marker: {size: 9, color: color(v), line: {width: 2, color: css('--panel')}},
+        text: s.map(d => d ? hover(d) : ''), hovertemplate: '%{text}<extra></extra>'});
+    }
+    const one = hline(1, 'no loss');
+    plot('c-bits', traces, layout('bits' + mode.bits, {
+      xaxis: axis({title: {text: 'Fixed-point width of weights and activations'}}),
+      yaxis: axis({title: {text: auc ? 'Top AUC ÷ AUC at full ⟨16,6⟩' : 'Accuracy (%)'}}),
+      shapes: auc ? [one.shape] : [], annotations: auc ? [one.note] : []
+    }));
+    const parts = drawn().map(({v}) => {
+      const s = scan(v), f = s[4];
+      if (!f) return `<b>${v}</b>: waiting for its full-precision design`;
+      let lo = null;
+      for (let i = 3; i >= 0; i--) { if (s[i] && s[i].acc_hls >= f.acc_hls - 0.005) lo = i; else break; }
+      return `<b>${v}</b> stays within 0.5 pts of full precision ${lo == null ? 'only at ⟨16,6⟩' : 'down to ' + BITS_LABEL[lo]}` +
+        (s[0] ? `, and loses ${pts(100 * (f.acc_hls - s[0].acc_hls))} at 4-bit` : '');
+    });
+    say('c-bits', parts.join('; ') + '.',
+      `<b>How to read:</b> full-size, unpruned networks at reuse 1, with only the bit width changed. Fewer bits means smaller multipliers and less logic, but more rounding error. The paper found no loss at ⟨16,6⟩ (its Fig. 9); the AUC view uses its measure, where 1 means no loss of separating power.`);
+  }
+
+  // ---- 3. drift ----
+  const KIND = {mass_scale: 'Jet-mass scale shift', smear: 'Resolution smearing', pileup: 'Extra pileup particles'};
+
+  function chartDrift() {
+    const vs = drawn().map(x => x.v), m = matched(vs), n = m[vs[0]].length, dr = S().drifts;
+    const kinds = [...new Set(dr.map(d => kindOf(d.key)))], w = 1 / kinds.length, gap = 0.035;
+    const acc = (v, key) => mean(m[v].map(d => key ? drifted(d, key) : 100 * d.acc_hls));  // no key = healthy detector
+    const traces = [], axes = {};
+    kinds.forEach((kd, i) => {
+      const cases = dr.filter(d => kindOf(d.key) === kd), ax = i ? String(i + 1) : '';
+      const x = ['healthy'].concat(cases.map(d => d.label.split(' ').pop()));
+      const where = ['healthy detector'].concat(cases.map(d => d.label));
+      for (const {v, ref} of drawn()) {
+        traces.push({type: 'scatter', mode: 'lines+markers', xaxis: 'x' + ax, yaxis: 'y', x, customdata: where,
+          y: [acc(v)].concat(cases.map(d => acc(v, d.key))), name: name(v, ref), legendgroup: v, showlegend: !i,
+          opacity: ref ? 0.5 : 1, line: {width: 2, color: color(v)}, marker: {size: 9, color: color(v), line: {width: 2, color: css('--panel')}},
+          hovertemplate: `<b>${v}</b>, %{customdata}: %{y:.2f}%<br>average of the same ${n} designs in every version<extra></extra>`});
+      }
+      axes['xaxis' + ax] = axis({anchor: 'y', title: {text: KIND[kd] || kd},
+        domain: [i * w + (i ? gap : 0), (i + 1) * w - (i < kinds.length - 1 ? gap : 0)]});
+    });
+    plot('c-drift', traces, layout('drift', Object.assign(axes, {yaxis: axis({title: {text: 'Accuracy (%)'}})})));
+
+    const strongest = kinds.map(kd => dr.filter(d => kindOf(d.key) === kd).pop());
+    const rv = refV(), mv = mainV();
+    let answer;
+    if (!n) answer = 'No design works in every version shown yet.';
+    else if (vs.length === 1) answer = `${vs[0]} averages ${pct(acc(vs[0]) / 100, 2)} on a healthy detector, and ` +
+      strongest.map(d => `${pct(acc(vs[0], d.key) / 100, 2)} at ${d.label}`).join(', ') + '.';
+    else if (rv) {
+      const v = mv[0], g = key => acc(v, key) - acc(rv, key);
+      const side = key => `<span class="${g(key) >= 0 ? 'up' : 'down'}">${pts(Math.abs(g(key)), 2)} ${g(key) >= 0 ? 'ahead' : 'behind'}</span>`;
+      answer = `On the same ${n} designs, ${v} is ${side()} v1 on a healthy detector, and ` +
+        strongest.map(d => `${side(d.key)} at ${d.label}`).join(', ') + '.';
+      const behind = dr.filter(d => g(d.key) < -0.1).map(d => d.label);
+      answer += behind.length ? ` Still behind v1 at <b>${behind.join(', ')}</b>, so these are the places to improve next.`
+        : ` It beats v1 at every drift tested.`;
+    } else {
+      const lead = key => vs.reduce((a, v) => acc(v, key) > acc(a, key) ? v : a);
+      const cell = (key, label) => { const l = lead(key);
+        return `${label}: <b>${l}</b> (${pct(acc(l, key) / 100, 2)}${l !== 'v1' && vs.includes('v1') ? `, v1 ${pct(acc('v1', key) / 100, 2)}` : ''})`; };
+      answer = `Most accurate on the same ${n} designs. ` + [cell(undefined, 'healthy detector')]
+        .concat(strongest.map(d => cell(d.key, d.label))).join('; ') + '.';
+    }
+    say('c-drift', answer,
+      `<b>How to read:</b> each panel starts from the healthy detector and makes one kind of drift stronger: the jet-mass scale shifted, the resolution smeared, or extra pileup particles added, as when a detector drifts out of calibration. The trained model stays as it was; only the test jets change. A line that starts higher but falls faster ends up below: that crossover is the trade between clean accuracy and robustness. Each point averages the same ${n} designs (same bits, size, pruning and reuse) in every version shown, leaving out any that collapse in one of them, so the versions are compared like for like.`);
+  }
+
+  // ---- 4. trigger ----
+  function chartTrigger() {
+    const auc = mode.trig === 'auc', names = SIG.map(s => SIG_NAME[s][0].toUpperCase() + SIG_NAME[s].slice(1) + ' trigger'), traces = [];
+    for (const {v, ref} of drawn()) {
+      const b = best(v);
+      if (!b) continue;
+      traces.push({type: 'bar', x: names, y: SIG.map(s => 100 * b[(auc ? 'auc_' : 'eff1_') + s]), name: name(v, ref),
+        marker: {color: color(v), opacity: ref ? 0.45 : 1},
+        hovertemplate: `<b>${v}</b> · ${b.name}<br>%{x}: %{y:.1f}%<extra></extra>`});
+    }
+    if (auc) traces.push({type: 'scatter', mode: 'markers', x: names, y: SIG.map(s => 100 * S().paper.auc[s]),
+      name: 'hls4ml paper (float)', marker: {symbol: 'line-ew-open', size: 46, line: {width: 3, color: css('--ink')}},
+      hovertemplate: 'paper, float model: %{y:.1f}%<extra></extra>'});
+    plot('c-trig', traces, layout('trig' + mode.trig, {barmode: 'group', bargap: 0.3, bargroupgap: 0.08, barcornerradius: 4,
+      xaxis: axis({}), yaxis: axis({title: {text: auc ? 'AUC (%)' : 'Signal jets kept (%)'}, range: auc ? [85, 100] : undefined, rangemode: 'tozero'})}));
+    const parts = drawn().map(({v}) => {
+      const b = best(v);
+      if (!b) return `<b>${v}</b>: none yet`;
+      return auc ? `<b>${v}</b> ${SIG.map(s => pct(b['auc_' + s])).join(' / ')}`
+        : `<b>${v}</b> ${SIG.map(s => pct(b['eff1_' + s])).join(' / ')}`;
+    });
+    const P = S().paper.auc;
+    const m = mainV()[mainV().length - 1], bm = best(m);
+    let weak = '';
+    if (bm) {
+      const key = auc ? 'auc_' : 'eff1_', low = SIG.reduce((a, s) => bm[key + s] < bm[key + a] ? s : a, 't');
+      weak = ` Weakest for ${m}: the ${SIG_NAME[low]} trigger.`;
+    }
+    say('c-trig', auc
+      ? `AUC for top / W / Z (best design that fits): ${parts.join('; ')}; paper (float) ${pct(P.t)} / ${pct(P.w)} / ${pct(P.z)}.${weak}`
+      : `Signal kept for top / W / Z at a 1% quark/gluon pass rate (best design that fits): ${parts.join('; ')}.${weak}`,
+      auc ? `<b>How to read:</b> AUC sums up the whole efficiency-vs-background curve (100% = perfect separation). The paper's values come from its float model and score one class against all four others; ours score signal against quark/gluon jets only. So the paper is a close benchmark, not an identical one.`
+        : `<b>How to read:</b> each trigger fires when a jet's score for its class beats every other class by a threshold. The threshold is set so only 1% of ordinary quark/gluon jets pass. The bar is the share of real signal jets kept at that rate; higher means a more useful trigger for the same data budget.`);
+  }
+
+  // ---- 5. self-correcting trigger ----
+  function chartSelf() {
+    const card = $('#c-self'), vs = mainV().filter(v => S().self_correcting[v]);
+    card.classList.toggle('hidden', !vs.length);
+    if (!vs.length) return;
+    const v = vs[vs.length - 1], rows = S().self_correcting[v], s = mode.sig, x = rows.map(r => driftLabel(r.key));
+    const kind = k => k.replace(/_[\d.]+$/, '');
+    const gap = (vals, fill) => rows.flatMap((r, i) => i && kind(r.key) !== kind(rows[i - 1].key) ? [fill(i), vals[i]] : [vals[i]]);
+    const tr = (tag, label, c, dash) => ({type: 'scatter', mode: 'lines+markers', x: gap(x, i => x[i]),
+      y: gap(rows.map(r => r.rate[tag][s]), () => null), name: label,
+      line: {width: 2, color: c, dash}, marker: {size: 8, color: c, line: {width: 2, color: css('--panel')}},
+      customdata: gap(rows.map(r => 100 * r.eff[tag][s]), () => null),
+      hovertemplate: `<b>${label}</b>, %{x}<br>background %{y:.2f}× budget · ${SIG_NAME[s]} jets kept %{customdata:.1f}%<extra></extra>`});
+    const one = hline(1, 'on budget');
+    plot('c-self', [tr('fixed', 'fixed threshold', css('--ink2'), 'dash'), tr('adapt', 'self-correcting', color(v), 'solid')],
+      layout('self' + s, {xaxis: axis({title: {text: 'Detector drift'}}), yaxis: axis({title: {text: 'Background rate ÷ budget'}, ticksuffix: '×'}),
+        shapes: [one.shape], annotations: [one.note]}));
+    const all = tag => rows.flatMap(r => SIG.map(q => r.rate[tag][q])).filter(y => !bad(y));
+    const rng = a => `${Math.min(...a).toFixed(2)}× and ${Math.max(...a).toFixed(2)}×`;
+    const eff = tag => pct(mean(rows.flatMap(r => SIG.map(q => r.eff[tag][q]))));
+    const off = tag => rows.map(r => mean(SIG.map(q => Math.abs(r.rate[tag][q] - 1))));
+    const worst = off('adapt').indexOf(Math.max(...off('adapt')));
+    say('c-self', `Across all drifts and all three triggers, the fixed thresholds end up between ${rng(all('fixed'))} their budget; self-correcting keeps them between ${rng(all('adapt'))}. ` +
+      `Signal kept, averaged: ${eff('fixed')} fixed, <b>${eff('adapt')}</b> self-correcting, ${eff('oracle')} best possible. Largest remaining error: <b>${x[worst]}</b>.`,
+      `<b>How to read:</b> the thresholds start from the healthy-detector calibration. Every 256 jets, each trigger compares its own pass count with its budget and nudges its threshold up or down. It needs no truth labels, so it can run on the chip (one counter, adder and register per trigger). 1.00× means exactly on budget. "Best possible" means a fresh, labelled recalibration to the same budget. Average over ${rows[0].n} ${v} designs.`);
+  }
+
+  // ---- page ----
+  function tabs() {
+    const list = S().versions.concat(S().versions.length > 1 ? ['compare'] : []);
+    if (!list.includes(tab)) {
+      const h = location.hash.slice(1);
+      tab = list.includes(h) ? h : list.includes(S().focus) ? S().focus : S().versions[S().versions.length - 1];
+    }
+    $('#tabs').innerHTML = list.map(t => `<button data-tab="${t}" class="${t === tab ? 'on' : ''}">` +
+      (t === 'compare' ? 'Compare all' : `<i style="background:${color(t)}"></i>${t}`) + '</button>').join('');
+    $('#about').innerHTML = ABOUT[tab] + (tab !== 'compare' && refV() ? ' The faint line or bar in each graph is v1, shown for comparison.' : '');
+  }
+
+  function header() {
+    const all = S().designs, fits = all.filter(d => d.fits_z7020).length, dead = all.filter(d => d.acc_hls < S().min_acc).length;
+    $('#sub').textContent = `${all.length} designs across ${S().versions.join(', ')} · ${fits} fit the xc7z020 · ` +
+      `${dead} collapsed (accuracy under ${Math.round(100 * S().min_acc)}%, left out) · data from ${S().generated}`;
+    $('#live').classList.toggle('hidden', !S().live);
+    $('#live').textContent = 'Sweep running: new designs appear here every 30 s';
+    $('#foot').innerHTML = `Accuracy and trigger numbers come from the circuit emulation (bit-accurate) on 50,000 test jets. Resources and latency are Vitis HLS 2024.1 estimates for the xc7z020 at 200 MHz. Paper references: ${S().paper.source}.`;
+    document.querySelectorAll('.seg').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', mode[g.dataset.mode] === b.dataset.val)));
+  }
+
+  function render() {
+    if (!window.SWEEP) { $('#sub').textContent = 'No data.js next to this page: run python plots.py first.'; return; }
+    if (!window.Plotly) { $('#sub').textContent = 'Could not load the plotting library (it needs an internet connection).'; return; }
+    tabs(); header(); scorecard();
+    chartResources(); chartBits(); chartDrift(); chartTrigger(); chartSelf();
+  }
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-tab]');
+    if (t) { tab = t.dataset.tab; history.replaceState(null, '', '#' + tab); render(); return; }
+    const b = e.target.closest('.seg button');
+    if (b) { mode[b.parentElement.dataset.mode] = b.dataset.val; render(); }
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+
+  // While a sweep runs, re-read data.js every 30 s and redraw in place if it changed
+  let stamp = window.SWEEP && S().generated;
+  const timer = setInterval(() => {
+    if (!window.SWEEP || !S().live) { clearInterval(timer); return; }
+    const s = document.createElement('script');
+    s.src = 'data.js?t=' + Date.now();
+    s.onload = () => { s.remove(); if (S().generated !== stamp) { stamp = S().generated; render(); } };
+    s.onerror = () => s.remove();
+    document.body.appendChild(s);
+  }, 30000);
+
+  render();
+})();
+</script>
+</body>
+</html>

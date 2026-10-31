@@ -74,7 +74,7 @@ Install **VS Code** on Windows and add the **WSL** extension. Then typing `code 
 cd ~
 git clone https://github.com/Orbital-Quark/hls4ml-jet-trigger.git
 cd hls4ml-jet-trigger
-git checkout v2-improved   # the v2-v4 code; main only has v1
+git checkout v2-improved   # the v2-v5.2 code; main only has v1
 conda env create -f environment.yml
 conda activate hls4ml-tutorial
 ```
@@ -164,7 +164,7 @@ Run two tiny models through the whole chain: training, chip synthesis, circuit e
 ```bash
 GRID=test VERSIONS=v4 REUSE=1 python sweep.py
 ```
-You should see two lines starting with `ok`, a summary table, and a browser window with graphs. If you see `FAIL`, check the error in `results/failed/` and the troubleshooting table at the end.
+You should see two lines starting with `ok`, a summary table, and the results page opening in your browser. If you see `FAIL`, check the error in `results/failed/` and the troubleshooting table at the end.
 
 The first run also trains a "teacher" model (about 2 minutes), which is reused afterwards.
 
@@ -179,32 +179,42 @@ The first run also trains a "teacher" model (about 2 minutes), which is reused a
 | **v2** | Robust: drops a duplicate input, log-scales wide inputs, trains on drifted jets, learns from a teacher model |
 | **v3** | Three data-driven experiments, tested only in the ablation (only one helped) |
 | **v4** | v2 + real-world rate weights + a trigger that corrects its own threshold as the detector drifts |
+| **v5** | v4 with softer rate weights, fewer drifted training jets, and a 16th always-zero input (a new jet every 20 ns instead of 25) |
+| **v5.2** | v5's networks + a physics-based correction of the inputs: the stream's median jet mass and particle count undo detector energy-scale slips and pileup |
 
 ### Run a full sweep of one version
 ```bash
-VERSIONS=v4 N_JOBS=4 python sweep.py 2>&1 | tee sweep_v4.log
+VERSIONS=v5 N_JOBS=4 python sweep.py 2>&1 | tee sweep_v5.log
 ```
-- It builds every design in the grid: 4 bit widths × 3 sizes × 3 pruning levels × 2 reuse settings, plus a float model and two mixed-bit models. That's 82 chip designs for v4, roughly **1.5–2.5 hours** with 4 jobs.
+- It builds every design in the grid: 4 bit widths × 3 sizes × 3 pruning levels × 2 reuse settings, plus a float model and two mixed-bit models. That's 82 chip designs per version, roughly **1.5–2.5 hours** with 4 jobs.
+- Each finished build keeps about 100 MB of Vitis files in `hls_prjs/`, so a sweep needs 10–15 GB free (see Part 3.4 to give the space back afterwards).
 - The terminal shows **one line per finished design**: accuracy, trigger efficiency, drift loss, chip resources, latency, and whether it fits the chip.
 - All the noisy output (training epochs, Vitis messages) goes to `logs/`.
-- The **graph page opens in your browser** after the first few designs and refreshes itself every minute.
-- At the end it prints a summary and draws the final graphs.
+- The **results page** (`figures/report.html`) opens in your browser after the first few designs, and new designs appear on it every 30 seconds.
+- At the end it prints a summary and gives the page its final data.
 - If it stops halfway, run the same command again. Finished designs are skipped.
 
 `N_JOBS` is how many designs are built at once. Use 4 if you have 16 GB+ RAM and 8+ cores, otherwise 2. It works without an NVIDIA GPU too, just slower.
 
 ### Look at the results again later
 ```bash
-python analyze.py              # the summary tables
-python plots.py v4 --open      # one version's graphs in the browser
-python plots.py v1 v2 v4 --open   # versions compared on the same graphs
+python analyze.py          # the summary tables in the terminal
+python plots.py --open     # the results page in the browser
+python plots.py --png      # also the paper-style images for the written report (figures/png/)
 ```
-Graphs are saved in `figures/<version>/`. Each folder has an `index.html` page showing every graph with a short caption. Every design's numbers are in `results/results.csv`.
+The results page has one tab per version plus **Compare all**. At the top is the best design that fits the chip, next to v1 and the hls4ml paper. Below are five graphs, each with a one-line answer worked out from the data and a short "how to read" note. Hover over any point for its numbers; click a legend entry to hide a version. The page needs an internet connection to load its plotting library. Every design's numbers are also in `results/results.csv`.
 
 ### The ablations (which change does what; Keras only, no chip builds)
 ```bash
 ABLATE=v2 python ablation.py   # v1 vs each v2 change
 ABLATE=v3 python ablation.py   # v2 vs each v3 change
+ABLATE=v5 python ablation.py   # v1, v2, v4 and each v5 change, also on drifts the training never saw
+```
+
+### v5.2 (after a v5 sweep; no retraining, about 30 minutes)
+```bash
+N_JOBS=4 python selfcal.py     # reloads every v5 network and retests it with the input self-calibration
+python plots.py --open
 ```
 
 ---
@@ -219,5 +229,5 @@ ABLATE=v3 python ablation.py   # v2 vs each v3 change
 | `code .` says "Exec format error" | That terminal is stale. Close it and open a new Ubuntu terminal |
 | C: drive full / install crashed partway | Free space on Windows, then shrink the WSL disk (Part 3.4) and restart the installer, which reuses what it downloaded |
 | A design shows `FAIL` | The error is in `results/failed/<design>.txt`; the full log is in `logs/points/` |
-| Graphs page doesn't open | Open `figures/<version>/index.html` yourself, or run `python plots.py <version> --open` |
+| Results page doesn't open, or is blank | Run `python plots.py --open`, or open `figures/report.html` yourself. A blank page means the plotting library couldn't download: check the internet connection |
 | Out of memory, or the laptop freezes during a sweep | Use `N_JOBS=2` |

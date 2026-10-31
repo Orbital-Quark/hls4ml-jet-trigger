@@ -1,14 +1,12 @@
 """Train, convert and synthesise every design in the grid, then evaluate it on the circuit emulation.
   VERSIONS=v4 N_JOBS=4 python sweep.py
 The terminal shows one line per finished design; everything else (TensorFlow, training epochs, Vitis) goes to
-logs/. Each version being run gets its own graphs (figures/<version>/), redrawn every few designs; the gallery
-page opens once the first graphs exist and updates itself. At the end the summary (analyze.py) is printed and
-the final graphs are drawn.
+logs/. The interactive results page (figures/report.html) opens once the first designs are done and adds new
+designs as they finish. At the end the summary (analyze.py) is printed and the page gets its final data.
 LIVE=0 turns the live graphs off; OPEN=0 stops the browser from opening."""
 import json
 import multiprocessing as mp
 import os
-import shlex
 import subprocess
 import sys
 import time
@@ -27,8 +25,8 @@ LIVE_EVERY = 6          # redraw the graphs after this many finished designs
 
 
 def version_flags(v):
-    from pipeline import V1, V2, V3, V4
-    return {"v1": V1, "v2": V2, "v3": V3, "v4": V4}[v]
+    from pipeline import V1, V2, V3, V4, V5, V52
+    return {"v1": V1, "v2": V2, "v3": V3, "v4": V4, "v5": V5, "v5.2": V52}[v]
 
 
 def model_configs():
@@ -46,9 +44,7 @@ def model_configs():
             if v == "v1" and isinstance(b, tuple):
                 continue
             cfgs.append(dict(version=v, bits=b, scale=s, sparsity=p))
-    cfgs.sort(key=lambda c: c["scale"])  # small (fast) models first
-    shard, n_shards = int(os.environ.get("SHARD", 0)), int(os.environ.get("NSHARDS", 1))
-    return [c for i, c in enumerate(cfgs) if i % n_shards == shard]
+    return sorted(cfgs, key=lambda c: c["scale"])  # small (fast) models first
 
 
 def bits_label(b):
@@ -78,6 +74,50 @@ def summary(row):
             f"LUT {row['lut']:>7,}  {row['latency_ns']:>4.0f} ns  {'fits chip' if fits else 'too big'}")
 
 
+def evaluate(hls_model, d, adaptive, calib=None):
+    """Everything measured on the circuit emulation: accuracy, trigger, every drift and every unseen drift.
+    calib (v5.2): an InputCalibrator that corrects each stream's raw inputs before the network sees them,
+    warmed up on earlier jets from the same (drifted) detector."""
+    import numpy as np
+
+    from common import classes
+    from drift import DRIFTS, UNSEEN, apply_drift
+    from trigger import SelfCorrectingMenu, TriggerMenu, roc
+
+    cl = classes()
+    Xe_raw, ye = d.X_te_raw[:N_EVAL], d.y_te[:N_EVAL]
+    Xv_raw, yv = d.X_val_raw[:N_EVAL], d.y_val[:N_EVAL]
+
+    def scores(X_raw, warm):  # the circuit's 5 raw scores per jet
+        if calib is not None:
+            X_raw = calib.run(warm, X_raw)
+        return hls_model.predict(np.ascontiguousarray(d.prep.transform(X_raw)))
+
+    def drifted(kind, level):  # same drifted data for every model
+        Xd = apply_drift(Xe_raw, kind, level, d.std, np.random.default_rng(1234), d.names)
+        warm = None if calib is None else apply_drift(Xv_raw, kind, level, d.std, np.random.default_rng(4321), d.names)
+        return scores(Xd, warm)
+
+    logits = scores(Xe_raw, Xv_raw)
+    row = dict(acc_hls=float((logits.argmax(1) == ye).mean()))
+    Menu = SelfCorrectingMenu if adaptive else TriggerMenu
+    menu = Menu(cl).calibrate(hls_model.predict(np.ascontiguousarray(d.prep.transform(Xv_raw))), yv)  # thresholds from validation jets
+    row["thresholds"] = menu.thresholds
+    row.update(roc(logits, ye, cl))
+    row.update(menu.evaluate(logits, ye))
+    for kind, level in DRIFTS[1:]:
+        ld = drifted(kind, level)
+        row[f"drift_{kind}_{level}"] = float((ld.argmax(1) == ye).mean())
+        for k, v in menu.evaluate(ld, ye).items():   # same thresholds: how efficiency and rate move
+            row[f"{k}_{kind}_{level}"] = v
+        if adaptive:  # v4+: let each trigger correct its own threshold on a drifted stream
+            sc = menu.self_correct(logits, ld, ye, np.random.default_rng(99), trace=(kind, level) == ("mass_scale", 0.1))
+            row.update({f"{k}_{kind}_{level}": v for k, v in sc.items()})
+    for kind, level in UNSEEN:  # drifts no version trains on: several at once, or beyond the training range
+        row[f"unseen_{kind}_{level}"] = float((drifted(kind, level).argmax(1) == ye).mean())
+    return row
+
+
 def run_model(c):
     todo = [rf for rf in REUSE if not (POINTS / f"{point_name(c, rf)}.json").exists()]
     if not todo:
@@ -86,19 +126,14 @@ def run_model(c):
     try:
         import numpy as np
 
-        from common import classes
         from convert import convert_and_synth, read_report
-        from drift import DRIFTS, apply_drift
+        from features import InputCalibrator
         from pipeline import build_data
         from train import train
-        from trigger import SelfCorrectingMenu, TriggerMenu, roc
 
         d = build_data(version_flags(c["version"]))
         model = train(c, d.X_fit, d.y_fit, d.X_val, d.y_val, targets=d.targets, weights=d.weights)  # once per config
-        cl = classes()
-        Xe_raw, ye = d.X_te_raw[:N_EVAL], d.y_te[:N_EVAL]
-        Xe = np.ascontiguousarray(d.prep.transform(Xe_raw))
-        Xv, yv = np.ascontiguousarray(d.X_val[:N_EVAL]), d.y_val[:N_EVAL]
+        Xe, ye = np.ascontiguousarray(d.prep.transform(d.X_te_raw[:N_EVAL])), d.y_te[:N_EVAL]
         acc_keras = float((model.predict(Xe, verbose=0).argmax(1) == ye).mean())
         nonzero = int(sum((l.get_weights()[0] != 0).sum() for l in model.layers if l.get_weights()))
     except Exception:
@@ -114,25 +149,9 @@ def run_model(c):
             row = dict(name=name, **c, bits_label=bits_label(c["bits"]), rf=rf, part=PART,
                        n_inputs=len(d.prep.names), acc_keras=acc_keras, nonzero_weights=nonzero,
                        rf_layers=hls_model.reuse_layers, **read_report(f"hls_prjs/{name}"))
-            logits = hls_model.predict(Xe)                     # the circuit's 5 raw scores per jet
-            row["acc_hls"] = float((logits.argmax(1) == ye).mean())
-            adaptive = version_flags(c["version"]).get("adaptive")
-            Menu = SelfCorrectingMenu if adaptive else TriggerMenu
-            menu = Menu(cl).calibrate(hls_model.predict(Xv), yv)  # thresholds from validation jets
-            row["thresholds"] = menu.thresholds
-            row.update(roc(logits, ye, cl))
-            row.update(menu.evaluate(logits, ye))
-            for kind, level in DRIFTS[1:]:
-                rng = np.random.default_rng(1234)  # same drifted data for every model
-                Xd = np.ascontiguousarray(d.prep.transform(apply_drift(Xe_raw, kind, level, d.std, rng, d.names)))
-                ld = hls_model.predict(Xd)
-                row[f"drift_{kind}_{level}"] = float((ld.argmax(1) == ye).mean())
-                for k, v in menu.evaluate(ld, ye).items():   # same thresholds: how efficiency and rate move
-                    row[f"{k}_{kind}_{level}"] = v
-                if adaptive:  # v4: let each trigger correct its own threshold on a drifted stream
-                    sc = menu.self_correct(logits, ld, ye, np.random.default_rng(99),
-                                           trace=(kind, level) == ("mass_scale", 0.1))
-                    row.update({f"{k}_{kind}_{level}": v for k, v in sc.items()})
+            flags = version_flags(c["version"])
+            calib = InputCalibrator(d.names).fit(d.X_val_raw) if flags.get("selfcal") else None
+            row.update(evaluate(hls_model, d, flags.get("adaptive"), calib))
             POINTS.mkdir(parents=True, exist_ok=True)
             (POINTS / f"{name}.json").write_text(json.dumps(row, indent=1))
             out.append(dict(status="ok", name=name, summary=summary(row)))
@@ -155,7 +174,7 @@ def clock(s):
 
 
 class LivePlots:
-    """Redraw each running version's graphs in the background every few designs; open its gallery the first time."""
+    """Refresh the results page's data in the background every few designs; open the page the first time."""
 
     def __init__(self, versions):
         self.versions, self.proc, self.opened = versions, None, False
@@ -170,9 +189,9 @@ class LivePlots:
         if not self.opened and os.environ.get("OPEN", "1") != "0":
             flags.append("--open")
             self.opened = True
-        chain = "; ".join(shlex.join([sys.executable, "plots.py", v, *flags]) for v in self.versions)
-        log = open(LOGS / "plots.log", "a")
-        self.proc = subprocess.Popen(["sh", "-c", chain], stdout=log, stderr=log)
+        log = open(LOGS / "plots.log", "a")  # every version in results/ is shown, so v1 is there to compare with
+        self.proc = subprocess.Popen([sys.executable, "plots.py", f"--tab={self.versions[-1]}", *flags],
+                                     stdout=log, stderr=log)
         if final:
             self.proc.wait()
 
@@ -184,8 +203,7 @@ if __name__ == "__main__":
     total = len(cfgs) * len(REUSE)
     print(f"Sweep {', '.join(versions)}: {len(cfgs)} models x reuse {REUSE} = {total} designs, "
           f"{os.environ.get('N_JOBS', 2)} at a time")
-    print(f"Detailed logs: {LOGS}/   Graphs: {', '.join(f'figures/{v}/index.html' for v in versions)} "
-          "(update as designs finish)\n", flush=True)
+    print(f"Detailed logs: {LOGS}/   Results page: figures/report.html (updates as designs finish)\n", flush=True)
 
     ctx = mp.get_context("spawn")
     with ctx.Pool(1) as pool:  # teachers and feature selections first, in their own process so the GPU is freed after
@@ -213,5 +231,4 @@ if __name__ == "__main__":
           f"{failed} failed{' (see results/failed/)' if failed else ''}.", flush=True)
     subprocess.run([sys.executable, "analyze.py"])
     live.update(final=True)
-    print(f"Final graphs: {', '.join(f'figures/{v}/' for v in versions)}  "
-          "(view again: python plots.py <version> --open; compare: python plots.py v1 v2 v4)")
+    print("Results page: figures/report.html  (open again: python plots.py --open; images for the report: --png)")

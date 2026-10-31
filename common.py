@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 
 DATA = Path("data")
+CLOCK_NS = 5.0  # 200 MHz: the clock every design is synthesised for
 
 
 def load():

@@ -48,10 +48,6 @@ class PhysicsScaler:
         Z = self._log(X[:, self.keep].astype(np.float64))
         return ((Z - self.center) / self.scale).astype(np.float32)
 
-    def describe(self):
-        logged = [n for n, m in zip(self.names, self.log_mask) if m]
-        return f"dropped {self.dropped}, log-transformed {logged}, {len(self.names)} inputs"
-
 
 class StandardPrep:
     """v1: the saved StandardScaler on all 16 features, exactly as in 5.1."""
@@ -62,8 +58,6 @@ class StandardPrep:
     def transform(self, X):
         return self.scaler.transform(X).astype(np.float32)
 
-    def describe(self):
-        return f"StandardScaler, {len(self.names)} inputs"
 
 
 class FeatureSelector:
@@ -113,8 +107,61 @@ class SelectedPrep:
     def transform(self, X):
         return np.ascontiguousarray(self.prep.transform(X)[:, self.cols])
 
-    def describe(self):
-        return f"{self.prep.describe()}; feature selection keeps {len(self.names)}: {self.names}"
+
+
+class PaddedPrep:
+    """Any preprocessing, followed by always-zero inputs up to `n` (v5). hls4ml only accepts reuse factors that
+    divide a layer evenly: 15 inputs rule out reuse 4, so it takes 5 and the chip accepts a new jet every 25 ns
+    instead of 20. A 16th input that is always zero changes nothing in the answer and brings reuse 4 back."""
+
+    def __init__(self, prep, n):
+        self.prep, self.n = prep, n
+        self.names = prep.names + [f"pad{i}" for i in range(n - len(prep.names))]
+        self.dropped = prep.dropped
+
+    def transform(self, X):
+        Z = self.prep.transform(X)
+        return np.ascontiguousarray(np.pad(Z, ((0, 0), (0, self.n - Z.shape[1]))))
+
+
+
+CAL_BLOCK = 256   # jets per update, as for the self-correcting trigger: a small counter on the chip
+CAL_GAIN = 0.02   # how far one update can move an estimate, as a fraction of it
+
+
+class InputCalibrator:
+    """v5.2: physics-based self-calibration of the two inputs a drifting detector shifts.
+
+    A trigger's stream is dominated by ordinary quark/gluon jets (~1000 per W, Z or top jet), whose jet mass and
+    particle count are stable physics. Their medians are a standard candle: if the median moves, the detector
+    moved. The medians on the healthy detector are stored once. On the live stream, a running estimate of each
+    median is nudged every CAL_BLOCK jets towards the side with more jets (a counter and a register on the chip),
+    and every jet is corrected with the current estimate:
+      mass           x (healthy median / current median)     undoes an energy-scale slip
+      particle count - (current median - healthy median)     undoes extra pileup particles
+    Smearing is noise around the true value, so it leaves the medians where they are and is left alone."""
+
+    def __init__(self, names):
+        self.cols = [names.index("mass_mmdt"), names.index("multiplicity")]
+
+    def fit(self, X_raw):
+        self.ref = np.median(X_raw[:, self.cols], axis=0).astype(np.float64)
+        return self
+
+    def run(self, X_warm, X_raw):
+        """Warm up on X_warm (earlier jets from the same detector), then correct X_raw block by block, each block
+        with the estimate from the blocks before it. Returns the corrected copy of X_raw."""
+        est = self.ref.copy()
+        for X, correct in ((X_warm, False), (X_raw, True)):
+            out = X.astype(np.float32).copy()
+            for blk in np.array_split(np.arange(len(X)), max(1, len(X) // CAL_BLOCK)):
+                if correct:
+                    out[blk, self.cols[0]] *= self.ref[0] / est[0]
+                    out[blk, self.cols[1]] -= np.round(est[1] - self.ref[1])
+                v = X[blk][:, self.cols]
+                est *= 1 + CAL_GAIN * ((v > est).mean(axis=0) - (v < est).mean(axis=0))
+        self.est = est
+        return out
 
 
 def make_prep(flags, X_tr_raw, scaler, names):
