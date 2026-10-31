@@ -74,7 +74,8 @@ Install **VS Code** on Windows and add the **WSL** extension. Then typing `code 
 cd ~
 git clone https://github.com/Orbital-Quark/hls4ml-jet-trigger.git
 cd hls4ml-jet-trigger
-git checkout v2-improved   # the v2-v5.2 code; main only has v1
+git checkout main-dev      # every version, v1 to v5.2; main only has v1
+git tag                    # v1, v2, v3-v4, v5-v5.2: "git checkout v2" shows the code as it was for v2
 conda env create -f environment.yml
 conda activate hls4ml-tutorial
 ```
